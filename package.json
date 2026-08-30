@@ -1,6 +1,7 @@
 {
   "name": "key-system-api",
   "version": "1.0.0",
+  "description": "Roblox Key System API with Discord Webhook Report",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
