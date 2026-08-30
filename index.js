@@ -1,21 +1,23 @@
 const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
+const cron = require('node-cron');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// المتغيرات البيئية الخاصة بـ GitHub
+// المتغيرات البيئية المخفية على Render
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
-// تحديد مستودع البيانات الذي يحتوي على keys.json مباشرة
-const DATA_REPO = 'mustapha9384/main.lua'; 
+// تحديد مستودع البيانات
+const DATA_REPO = 'mustapha9384/main.lua';
 const FILE_PATH = 'keys.json';
 
 app.use(express.json());
 
 // ==========================================
-// 0. واجهة الموقع الرئيسية
+// 1. واجهة الموقع الرئيسية (HTML/CSS/JS)
 // ==========================================
 app.get('/', (req, res) => {
     res.send(`
@@ -94,14 +96,13 @@ app.get('/', (req, res) => {
 });
 
 // ==========================================
-// 1. مسار توليد المفاتيح (Web API)
+// 2. مسار توليد المفاتيح (Web API)
 // ==========================================
 app.get('/generate-key', async (req, res) => {
     try {
         const rawKey = 'KEY-' + crypto.randomBytes(8).toString('hex').toUpperCase();
         const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
 
-        // الاتصال بمستودع البيانات DATA_REPO المباشر
         const getUrl = `https://api.github.com/repos/${DATA_REPO}/contents/${FILE_PATH}`;
         const headers = {
             'Authorization': `token ${GITHUB_TOKEN}`,
@@ -145,7 +146,7 @@ app.get('/generate-key', async (req, res) => {
 });
 
 // ==========================================
-// 2. مسار التحقق من المفتاح والـ HWID (Roblox API)
+// 3. مسار التحقق من المفتاح والـ HWID (Roblox API)
 // ==========================================
 app.post('/verify-key', async (req, res) => {
     try {
@@ -207,6 +208,65 @@ app.post('/verify-key', async (req, res) => {
         console.error('Error verifying key:', error.message);
         res.status(500).json({ success: false, message: 'Server Error during verification' });
     }
+});
+
+// ==========================================
+// 4. نظام التقرير اليومي التلقائي لدبسكورد
+// ==========================================
+async function sendDailyReport() {
+    if (!DISCORD_WEBHOOK_URL) {
+        return console.log("Discord Webhook URL not set in environment variables!");
+    }
+
+    try {
+        const getUrl = `https://api.github.com/repos/${DATA_REPO}/contents/${FILE_PATH}`;
+        const headers = {
+            'Authorization': `token ${GITHUB_TOKEN}`,
+            'User-Agent': 'Key-System-App',
+            'Accept': 'application/vnd.github.v3+json'
+        };
+
+        const fileRes = await fetch(getUrl, { headers });
+        if (!fileRes.ok) throw new Error('Failed to fetch keys for report');
+
+        const fileData = await fileRes.json();
+        const currentContent = Buffer.from(fileData.content, 'base64').toString('utf-8');
+        const keysList = JSON.parse(currentContent);
+
+        const totalKeys = keysList.length;
+        const activeKeys = keysList.filter(k => k.hwid !== null).length;
+        const unusedKeys = totalKeys - activeKeys;
+
+        const embedPayload = {
+            embeds: [{
+                title: "📊 التقرير اليومي لنظام المفاتيح",
+                color: 38bdf8,
+                fields: [
+                    { name: "إجمالي المفاتيح المنشأة", value: `${totalKeys}`, inline: true },
+                    { name: "المفاتيح المفعلة (المربوطة بـ HWID)", value: `${activeKeys}`, inline: true },
+                    { name: "المفاتيح غير المستعملة", value: `${unusedKeys}`, inline: true }
+                ],
+                footer: { text: "Key System Auto Report" },
+                timestamp: new Date().toISOString()
+            }]
+        };
+
+        await fetch(DISCORD_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(embedPayload)
+        });
+
+        console.log("Daily report sent to Discord successfully!");
+
+    } catch (error) {
+        console.error("Error sending daily report:", error.message);
+    }
+}
+
+// جدولة التقرير ليرسل يومياً الساعة 12 منتصف الليل (00:00)
+cron.schedule('0 0 * * *', () => {
+    sendDailyReport();
 });
 
 app.listen(PORT, () => {
