@@ -17,7 +17,7 @@ const FILE_PATH = 'keys.json';
 app.use(express.json());
 
 // ==========================================
-// دالة تشفير HWID باستخدام HMAC-SHA256 واسم المستخدم
+// دالة تشفير HWID باستخدام HMAC-SHA256 واسم المستخدم (لا تخزن اليوزر)
 // ==========================================
 function generateHashedHWID(hwid, username) {
     if (!hwid || !username) return null;
@@ -184,7 +184,7 @@ app.get('/generate-key', async (req, res) => {
 });
 
 // ==========================================
-// 3. مسار التحقق من المفتاح والـ HWID مدمج مع التشفير واسم المستخدم (Roblox API)
+// 3. مسار التحقق من المفتاح والـ HWID (بدون حفظ Username إطلاقاً)
 // ==========================================
 app.post('/verify-key', async (req, res) => {
     try {
@@ -195,6 +195,8 @@ app.post('/verify-key', async (req, res) => {
         }
 
         const keyHash = crypto.createHash('sha256').update(key.trim()).digest('hex');
+        
+        // حساب الـ HMAC باستخدام اليوزر نيم والـ HWID معاً
         const hashedHwid = generateHashedHWID(hwid, username);
 
         const getUrl = `https://api.github.com/repos/${DATA_REPO}/contents/${FILE_PATH}`;
@@ -221,10 +223,9 @@ app.post('/verify-key', async (req, res) => {
 
         const targetKey = keysList[keyIndex];
 
-        // تفعيل المفتاح لأول مرة وتشفير HWID مع Username
+        // تفعيل المفتاح لأول مرة (حفظ التشفير الناتج فقط في hwid دون إضافة يوزر نيم)
         if (!targetKey.hwid) {
             targetKey.hwid = hashedHwid;
-            targetKey.username = username;
             targetKey.activatedAt = new Date().toISOString();
             keysList[keyIndex] = targetKey;
 
@@ -233,7 +234,7 @@ app.post('/verify-key', async (req, res) => {
                 method: 'PUT',
                 headers: { ...headers, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: 'Bind HMAC HWID and username to key',
+                    message: 'Bind HMAC HWID to key',
                     content: updatedContentBase64,
                     sha: sha
                 })
@@ -242,12 +243,12 @@ app.post('/verify-key', async (req, res) => {
             await sendDiscordLog(username, key, true, "تم تفعيل المفتاح وربطه بالـ HMAC المشفر بنجاح");
             return res.json({ success: true, message: 'Key verified and locked to your device!' });
 
-        // المطابقة في المرات القادمة
+        // المطابقة في المرات القادمة (إعادة حساب الـ HMAC ومقارنته بالـ hwid المخزن)
         } else if (targetKey.hwid === hashedHwid) {
             await sendDiscordLog(username, key, true, "تم مطابقة الجهاز وتأكيد الدخول");
             return res.json({ success: true, message: 'Key verified successfully!' });
 
-        // في حال تم استخدام المفتاح من حساب أو جهاز آخر
+        // إذا تغير اسم المستخدم أو تغير الجهاز، سيتغير الهاش المحسوب وتفشل العملية
         } else {
             await sendDiscordLog(username, key, false, "محاولة استخدام المفتاح من حساب أو جهاز آخر");
             return res.json({ success: false, message: 'This key is bound to another device!' });
