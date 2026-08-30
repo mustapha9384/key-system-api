@@ -211,7 +211,7 @@ app.post('/verify-key', async (req, res) => {
 });
 
 // ==========================================
-// 4. نظام التقرير اليومي التلقائي لدبسكورد
+// 4. نظام التقرير اليومي التلقائي لديسكورد
 // ==========================================
 async function sendDailyReport() {
     if (!DISCORD_WEBHOOK_URL) {
@@ -240,7 +240,7 @@ async function sendDailyReport() {
         const embedPayload = {
             embeds: [{
                 title: "📊 التقرير اليومي لنظام المفاتيح",
-                color: 38bdf8,
+                color: 0x38bdf8,
                 fields: [
                     { name: "إجمالي المفاتيح المنشأة", value: `${totalKeys}`, inline: true },
                     { name: "المفاتيح المفعلة (المربوطة بـ HWID)", value: `${activeKeys}`, inline: true },
