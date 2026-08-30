@@ -5,13 +5,24 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// المتغيرات الخاصة بـ GitHub
+// المتغيرات البيئية الخاصة بـ GitHub
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GITHUB_REPO = process.env.GITHUB_REPO; // صيغة: username/repository-name
 const FILE_PATH = 'keys.json';
 
 app.use(express.json());
+
+// تشغيل مجلد public في حال وجود واجهة HTML
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ==========================================
+// 0. مسار الصفحة الرئيسية (لتجنب Cannot GET /)
+// ==========================================
+app.get('/', (req, res) => {
+    // إذا كان ملف index.html موجوداً داخل مجلد public سيتم عرضه تلقائياً،
+    // أما إذا لم يكن موجوداً، سيظهر هذا النص للتأكيد على أن السيرفر يعمل.
+    res.send('Key System Server is running successfully!');
+});
 
 // ==========================================
 // 1. مسار توليد المفاتيح (Web API)
